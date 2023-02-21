@@ -177,6 +177,7 @@ public class InliningGenerator : IIncrementalGenerator
         var body = GetLambdaBody(lambda);
 
         var writer = new StringWriter();
+        writer.WriteLine("{");
 
         foreach (var arg in methodInfo.GetArgumentsExceptLambda(lambda))
         {
@@ -188,6 +189,7 @@ public class InliningGenerator : IIncrementalGenerator
         }
 
         writer.WriteLine(RenderTemplate(template, parameters, body));
+        writer.WriteLine("}");
 
         return writer.ToString();
     }
