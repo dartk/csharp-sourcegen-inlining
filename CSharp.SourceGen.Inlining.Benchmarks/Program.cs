@@ -7,11 +7,17 @@ using CSharp.SourceGen.Inlining.Benchmarks;
 BenchmarkRunner.Run<Benchmarks>();
 
 
+public struct InlinedDefinition
+{
+    public static readonly InlinedDefinition Default = default;
+}
+
+
 [MemoryDiagnoser]
 public partial class Benchmarks
 {
-    [GenerateInlined]
-    public static int CalculateSum(Span<int> values)
+    [GenerateInlined(nameof(CalculateSum_Inlined))]
+    public static int CalculateSum_Original(Span<int> values)
     {
         var count = 0;
         Methods.ForEach(values, [Inline](x) => { count += x; });
@@ -36,16 +42,16 @@ public partial class Benchmarks
 
 
     [Benchmark]
-    public void Regular()
+    public void Original()
     {
-        CalculateSum(this._array);
+        CalculateSum_Original(this._array);
     }
 
 
     [Benchmark(Baseline = true)]
     public void Inlined()
     {
-        CalculateSum_inlined(this._array);
+        CalculateSum_Inlined(this._array);
     }
 
 

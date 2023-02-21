@@ -13,6 +13,7 @@ public class InliningGenerator : IIncrementalGenerator
 {
     private const string Inline = nameof(Inline);
     private const string GenerateInlined = nameof(GenerateInlined);
+    private const string GenerateInlinedAttribute = nameof(GenerateInlinedAttribute);
     private const string SupportsInliningAttribute = nameof(SupportsInliningAttribute);
 
 
@@ -40,8 +41,10 @@ public class InliningGenerator : IIncrementalGenerator
 
                 var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
 
+                var inlinedMethodName = GetInlinedMethodName(methodSymbol);
+
                 var writer = new StringWriter();
-                WriteInlinedMethod(writer, methodSyntax, context.SemanticModel);
+                WriteInlinedMethod(writer, inlinedMethodName, methodSyntax, context.SemanticModel);
 
                 return new
                 {
@@ -58,24 +61,34 @@ public class InliningGenerator : IIncrementalGenerator
 
 
     private readonly record struct ParameterInfo(string Name, string? Type);
-    private readonly record struct ArgumentInfo(string Name, string Value);
+
+
+    private readonly record struct ArgumentInfo(string Name, string? Value)
+    {
+        public bool IsLambda => this.Value == null;
+    }
 
 
     private readonly record struct InlinableMethodInfo(
         IMethodSymbol Symbol, InvocationExpressionSyntax InvocationSyntax)
     {
-        public IEnumerable<ArgumentInfo> GetArgumentsExceptLambda(
-            ParenthesizedLambdaExpressionSyntax lambda)
+        public ImmutableArray<ArgumentInfo> GetArguments(ParenthesizedLambdaExpressionSyntax lambda)
         {
-            var lambdaArg = (ArgumentSyntax?)lambda.Parent;
             var args = this.InvocationSyntax.ArgumentList.Arguments;
+            if (args.Count == 0)
+            {
+                return ImmutableArray<ArgumentInfo>.Empty;
+            }
+
+            var lambdaArg = (ArgumentSyntax?)lambda.Parent;
 
             var names = this.Symbol.Parameters.Select(x => x.Name);
             var values = args.Select(x => x != lambdaArg ? x.ToString() : null);
 
-            return names.Zip(values, (name, value) =>
-                    value != null ? new ArgumentInfo(name, value) : default)
-                .Where(x => !string.IsNullOrEmpty(x.Name));
+            var builder = ImmutableArray.CreateBuilder<ArgumentInfo>(args.Count);
+            builder.AddRange(names.Zip(values, (name, value) => new ArgumentInfo(name, value)));
+
+            return builder.MoveToImmutable();
         }
     }
 
@@ -140,8 +153,7 @@ public class InliningGenerator : IIncrementalGenerator
             throw new Exception("Method does not support inlining");
         }
 
-        var templateArg = methodAttribute.ConstructorArguments.First();
-        var template = (string?)templateArg.Value;
+        var template = GetAttributeArgumentValue(methodAttribute);
         if (template == null)
         {
             throw new Exception("Inlining template is null.");
@@ -151,18 +163,34 @@ public class InliningGenerator : IIncrementalGenerator
     }
 
 
-    private static string RenderTemplate(string template, ImmutableArray<ParameterInfo> parameters,
-        string body)
+    private static string? GetInlinedMethodName(IMethodSymbol methodSymbol)
+    {
+        var attribute = methodSymbol.GetAttributes()
+            .First(x => x.AttributeClass?.Name == GenerateInlinedAttribute);
+
+        return GetAttributeArgumentValue(attribute);
+    }
+
+
+    private static string? GetAttributeArgumentValue(AttributeData attribute)
+    {
+        var arg = attribute.ConstructorArguments.First();
+        return (string?)arg.Value;
+    }
+
+
+    private static string RenderTemplate(string lambdaArgName, string template,
+        ImmutableArray<ParameterInfo> parameters, string body)
     {
         var source = template;
         for (var i = 0; i < parameters.Length; ++i)
         {
             var parameter = parameters[i];
-            source = source.Replace($"{{name{i}}}", parameter.Name);
-            source = source.Replace($"{{type{i}}}", parameter.Type);
+            source = source.Replace($"{{{lambdaArgName}.arg{i}}}", parameter.Name);
+            source = source.Replace($"{{{lambdaArgName}.arg{i}.type}}", parameter.Type);
         }
 
-        return source.Replace("{body}", body);
+        return source.Replace($"{{{lambdaArgName}.body}}", body);
     }
 
 
@@ -178,8 +206,10 @@ public class InliningGenerator : IIncrementalGenerator
         var writer = new StringWriter();
         writer.WriteLine("{");
 
-        foreach (var arg in methodInfo.GetArgumentsExceptLambda(lambda))
+        var args = methodInfo.GetArguments(lambda);
+        foreach (var arg in args)
         {
+            if (arg.IsLambda) continue;
             writer.Write("var ");
             writer.Write(arg.Name);
             writer.Write(" = ");
@@ -187,24 +217,25 @@ public class InliningGenerator : IIncrementalGenerator
             writer.WriteLine(";");
         }
 
-        writer.WriteLine(RenderTemplate(template, parameters, body));
+        var lambdaArgName = args.First(x => x.IsLambda).Name;
+        writer.WriteLine(RenderTemplate(lambdaArgName, template, parameters, body));
         writer.WriteLine("}");
 
         return writer.ToString();
     }
 
 
-    private static void WriteInlinedMethod(TextWriter writer, MethodDeclarationSyntax methodSyntax,
-        SemanticModel semanticModel)
+    private static void WriteInlinedMethod(TextWriter writer, string? inlinedName,
+        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
     {
-        WriteInlinedMethodDeclaration(writer, methodSyntax, semanticModel);
+        WriteInlinedMethodDeclaration(writer, inlinedName, methodSyntax, semanticModel);
         writer.WriteLine();
         WriteInlinedMethodBlock(writer, methodSyntax, semanticModel);
     }
 
 
     private static void WriteInlinedMethodDeclaration(TextWriter writer,
-        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
+        string? inlinedName, MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
     {
         var symbol = (IMethodSymbol?)semanticModel.GetDeclaredSymbol(methodSyntax);
         if (symbol == null)
@@ -224,8 +255,7 @@ public class InliningGenerator : IIncrementalGenerator
 
         writer.Write(symbol.ReturnType);
         writer.Write(" ");
-        writer.Write(symbol.Name);
-        writer.Write("_inlined");
+        writer.Write(inlinedName ?? symbol.Name + "_Inlined");
 
         var typeParameterList = methodSyntax.ChildNodes().OfType<TypeParameterListSyntax>()
             .FirstOrDefault();
