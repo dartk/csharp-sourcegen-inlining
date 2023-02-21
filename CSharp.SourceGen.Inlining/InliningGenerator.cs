@@ -13,7 +13,7 @@ public class InliningGenerator : IIncrementalGenerator
 {
     private const string Inline = nameof(Inline);
     private const string GenerateInlined = nameof(GenerateInlined);
-    private const string SupportInliningAttribute = nameof(SupportInliningAttribute);
+    private const string SupportsInliningAttribute = nameof(SupportsInliningAttribute);
 
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -134,7 +134,7 @@ public class InliningGenerator : IIncrementalGenerator
     private static string GetInliningTemplate(IMethodSymbol method)
     {
         var methodAttribute = method.GetAttributes()
-            .FirstOrDefault(x => x.AttributeClass?.Name == SupportInliningAttribute);
+            .FirstOrDefault(x => x.AttributeClass?.Name == SupportsInliningAttribute);
 
         if (methodAttribute == null)
         {

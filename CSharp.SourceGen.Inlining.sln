@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharp.SourceGen.Inlining", "CSharp.SourceGen.Inlining\CSharp.SourceGen.Inlining.csproj", "{D0F2D88C-BD4C-41A0-8A38-A3806F346537}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CSharp.SourceGen.Inlining.Benchmarks", "CSharp.SourceGen.Inlining.Benchmarks\CSharp.SourceGen.Inlining.Benchmarks.csproj", "{E197E7F0-8ABE-4AFE-9A8E-80DA0A0FE57A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{D0F2D88C-BD4C-41A0-8A38-A3806F346537}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D0F2D88C-BD4C-41A0-8A38-A3806F346537}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D0F2D88C-BD4C-41A0-8A38-A3806F346537}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E197E7F0-8ABE-4AFE-9A8E-80DA0A0FE57A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E197E7F0-8ABE-4AFE-9A8E-80DA0A0FE57A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E197E7F0-8ABE-4AFE-9A8E-80DA0A0FE57A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E197E7F0-8ABE-4AFE-9A8E-80DA0A0FE57A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

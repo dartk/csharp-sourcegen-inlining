@@ -1,3 +1,6 @@
 # CSharp.SourceGen.Inlining
 
-C# source generator for inlining closures.
+C# source generator for inlining lambdas.
+
+```c#
+```
