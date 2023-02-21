@@ -19,39 +19,38 @@ public class InliningGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var provider = context.SyntaxProvider.CreateSyntaxProvider(
-                predicate: static (node, _) => node.IsAttribute(GenerateInlined),
-                transform: static (context, _) =>
+            predicate: static (node, _) => node.IsAttribute(GenerateInlined),
+            transform: static (context, _) =>
+            {
+                var methodSyntax = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
+                if (methodSyntax == null)
                 {
-                    var methodSyntax = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
-                    if (methodSyntax == null)
-                    {
-                        return null;
-                    }
+                    return null;
+                }
 
-                    var typeSyntax = methodSyntax.FirstAncestorOrSelf<TypeDeclarationSyntax>();
-                    if (typeSyntax == null)
-                    {
-                        return null;
-                    }
+                var typeSyntax = methodSyntax.FirstAncestorOrSelf<TypeDeclarationSyntax>();
+                if (typeSyntax == null)
+                {
+                    return null;
+                }
 
-                    var methodSymbol =
-                        (IMethodSymbol?)context.SemanticModel.GetDeclaredSymbol(methodSyntax)
-                        ?? throw new Exception("Type symbol was not found");
+                var methodSymbol =
+                    (IMethodSymbol?)context.SemanticModel.GetDeclaredSymbol(methodSyntax)
+                    ?? throw new Exception("Type symbol was not found");
 
-                    var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
+                var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
 
-                    var writer = new StringWriter();
-                    WriteInlinedMethod(writer, methodSyntax, context.SemanticModel);
+                var writer = new StringWriter();
+                WriteInlinedMethod(writer, methodSyntax, context.SemanticModel);
 
-                    return new
-                    {
-                        FileName = methodSymbol.SuggestedFileName(methodSyntax.Identifier.Text),
-                        Text = declarationInfo.ToString(
-                            withUsing: "#define SOURCEGEN",
-                            withMembers: writer.ToString())
-                    };
-                })
-            .Where(x => x != null);
+                return new
+                {
+                    FileName = methodSymbol.SuggestedFileName(methodSyntax.Identifier.Text),
+                    Text = declarationInfo.ToString(
+                        withUsing: "#define SOURCEGEN",
+                        withMembers: writer.ToString())
+                };
+            }).Where(x => x != null);
 
         context.RegisterSourceOutput(provider,
             static (context, arg) => { context.AddSource(arg!.FileName, arg.Text); });
