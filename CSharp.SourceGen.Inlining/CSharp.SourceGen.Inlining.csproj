@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Dartk.CSharp.SourceGen.Inlining</PackageId>
+        <Title>CSharp.SourceGen.Inlining</Title>
+        <Authors>Dmitry Artemkin</Authors>
+        <Copyright>2023</Copyright>
+        <Description>C# source generator for inlining closures</Description>
+        <PackageProjectUrl>https://github.com/dartk/csharp-sourcegen-inlining</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/dartk/csharp-sourcegen-inlining</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageTags>C# code generation</PackageTags>
+        <PackageVersion>0.1.0-alpha4</PackageVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="./../README.md" Pack="true" PackagePath="/" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.0.1" PrivateAssets="all" />
+        <PackageReference Include="Dartk.CSharp.SourceGen.Extensions" Version="0.1.0-alpha18" PrivateAssets="all" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Package the generator in the analyzer directory of the nuget package -->
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <Compile Remove="Attributes/*.cs" />
+        <None Include="Attributes/*.cs" PackagePath="ContentFiles/cs/any/SourceGen.Inlining" Pack="true" />
+    </ItemGroup>
+</Project>
