@@ -1,59 +1,92 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using CSharp.SourceGen.Inlining.Attributes;
-using CSharp.SourceGen.Inlining.Benchmarks;
 
 
 BenchmarkRunner.Run<Benchmarks>();
 
 
-public struct InlinedDefinition
-{
-    public static readonly InlinedDefinition Default = default;
-}
-
-
 [MemoryDiagnoser]
 public partial class Benchmarks
 {
-    [GenerateInlined(nameof(CalculateSum_Inlined))]
-    public static int CalculateSum_Original(Span<int> values)
-    {
-        var count = 0;
-        Methods.ForEach(values, [Inline](x) => { count += x; });
-        return count;
-    }
-
-
-    [Params(10_000, 100_000, 1_000_000)]
+    [Params(10, 1_000, 100_000)]
     public int N { get; set; }
 
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        var random = new Random(0);
         this._array = new int[N];
         for (var i = 0; i < N; ++i)
         {
-            this._array[i] = random.Next();
+            this._array[i] = i;
         }
-    }
-
-
-    [Benchmark]
-    public void Original()
-    {
-        CalculateSum_Original(this._array);
     }
 
 
     [Benchmark(Baseline = true)]
     public void Inlined()
     {
-        CalculateSum_Inlined(this._array);
+        var result = CalculateSum_Inlined(this._array);
+        Assert.Equal((this.N - 1) * this.N / 2, result);
+    }
+
+
+    [Benchmark]
+    public void Original()
+    {
+        var result = CalculateSum_Original(this._array);
+        Assert.Equal((this.N - 1) * this.N / 2, result);
     }
 
 
     private int[] _array = null!;
+
+
+    [GenerateInlined(nameof(CalculateSum_Inlined))]
+    public static int CalculateSum_Original(Span<int> values)
+    {
+        var count = 0;
+        ForEach(values, [Inline](x) => { count += x; });
+        return count;
+    }
+
+
+    [SupportsInlining("""
+    foreach (var {action.arg0} in span)
+    {
+        {action.body}
+    }
+    """)]
+    public static void ForEach<T>(Span<T> span, Action<T> action)
+    {
+        foreach (var item in span)
+        {
+            action(item);
+        }
+    }
+}
+
+
+public static class Assert
+{
+    public static void Equal<T>(T expected, T actual)
+    {
+        if (!EqualityComparer<T>.Default.Equals(expected, actual))
+        {
+            throw new AssertionException(expected, actual);
+        }
+    }
+}
+
+
+public class AssertionException : Exception
+{
+    public AssertionException(object? expected, object? actual)
+        : base(
+            "Assert Failed" + Environment.NewLine +
+            "Expected: " + (expected ?? "null") + Environment.NewLine +
+            "Actual: " + (actual ?? "null"))
+    {
+    }
 }
