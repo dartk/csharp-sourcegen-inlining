@@ -14,7 +14,7 @@ public partial class Benchmarks
     public static int CalculateSum(Span<int> values)
     {
         var count = 0;
-        Methods.ForEach(values, [Inline](int x) => { count += x; });
+        Methods.ForEach(values, [Inline](x) => { count += x; });
         return count;
     }
 

@@ -57,7 +57,7 @@ public class InliningGenerator : IIncrementalGenerator
     }
 
 
-    private readonly record struct ParameterInfo(string Name, string Type);
+    private readonly record struct ParameterInfo(string Name, string? Type);
     private readonly record struct ArgumentInfo(string Name, string Value);
 
 
@@ -90,7 +90,7 @@ public class InliningGenerator : IIncrementalGenerator
         {
             builder.Add(new ParameterInfo(
                 parameter.Identifier.Text,
-                parameter.Type!.ToString()));
+                parameter.Type?.ToString()));
         }
 
         return builder.MoveToImmutable();
