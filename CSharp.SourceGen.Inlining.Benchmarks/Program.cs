@@ -1,7 +1,6 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using CSharp.SourceGen.Inlining.Attributes;
-using static SpanExtensions;
 
 
 BenchmarkRunner.Run<Benchmarks>();
@@ -42,10 +41,10 @@ public partial class Benchmarks
     
     
     [GenerateInlined(nameof(Sum_Inlined))]
-    public static int Sum_Original(Span<int> values)
+    public static int Sum_Original(Span<int> span)
     {
         var count = 0;
-        values.ForEach([Inline](x) => { count += x; });
+        span.ForEach([Inline](x) => { count += x; });
         return count;
     }
 
@@ -57,7 +56,7 @@ public partial class Benchmarks
 public static class SpanExtensions
 {
     [SupportsInlining("""
-    foreach (var {action.arg0} in values)
+    foreach (var {action.arg0} in @this)
     {
         {action.body}
     }

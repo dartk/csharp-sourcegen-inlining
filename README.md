@@ -146,18 +146,18 @@ public partial class Example
 
 Using lambdas in C# provide a lot of convenience but at the same time it prevents compiler to perform certain optimizations and can lead to unnecessary memory allocations and garbage collection. In many cases an inlined version of a method is going to be significantly faster than the one using a lambda.
 
-For the sum calculation example above the inlined version is more than 5x faster than the original on top of the original method allocating memory on the heap:
+For the sum calculation example above the inlined version is 3x faster than the original on top of the original method allocating memory on the heap:
 
-|   Method |      N |           Mean |         Error |        StdDev | Ratio | RatioSD |   Gen0 | Allocated | Alloc Ratio |
-|--------- |------- |---------------:|--------------:|--------------:|------:|--------:|-------:|----------:|------------:|
-|  Inlined |     10 |       5.113 ns |     0.0370 ns |     0.0328 ns |  1.00 |    0.00 |      - |         - |          NA |
-| Original |     10 |      27.734 ns |     0.5628 ns |     0.6481 ns |  5.42 |    0.14 | 0.0105 |      88 B |          NA |
-|          |        |                |               |               |       |         |        |           |             |
-|  Inlined |   1000 |     255.669 ns |     2.1257 ns |     1.9884 ns |  1.00 |    0.00 |      - |         - |          NA |
-| Original |   1000 |   1,465.871 ns |     2.9754 ns |     2.4846 ns |  5.73 |    0.05 | 0.0095 |      88 B |          NA |
-|          |        |                |               |               |       |         |        |           |             |
-|  Inlined | 100000 |  24,176.931 ns |   145.8679 ns |   129.3081 ns |  1.00 |    0.00 |      - |         - |          NA |
-| Original | 100000 | 169,768.314 ns | 1,392.5771 ns | 1,234.4833 ns |  7.02 |    0.08 |      - |      88 B |          NA |
+|   Method |      N |           Mean |       Error |      StdDev | Ratio | RatioSD |   Gen0 | Allocated | Alloc Ratio |
+|--------- |------- |---------------:|------------:|------------:|------:|--------:|-------:|----------:|------------:|
+|  Inlined |     10 |       5.495 ns |   0.1335 ns |   0.1537 ns |  1.00 |    0.00 |      - |         - |          NA |
+| Original |     10 |      26.509 ns |   0.0727 ns |   0.0645 ns |  4.77 |    0.12 | 0.0105 |      88 B |          NA |
+|          |        |                |             |             |       |         |        |           |             |
+|  Inlined |   1000 |     250.785 ns |   1.1302 ns |   1.0571 ns |  1.00 |    0.00 |      - |         - |          NA |
+| Original |   1000 |   1,448.734 ns |   2.1895 ns |   1.7094 ns |  5.78 |    0.03 | 0.0095 |      88 B |          NA |
+|          |        |                |             |             |       |         |        |           |             |
+|  Inlined | 100000 |  23,898.808 ns |  51.7429 ns |  45.8687 ns |  1.00 |    0.00 |      - |         - |          NA |
+| Original | 100000 | 167,166.113 ns | 267.8199 ns | 237.4154 ns |  6.99 |    0.02 |      - |      88 B |          NA |
 
 <details>
 <summary>Benchmark code</summary>
@@ -192,7 +192,7 @@ public partial class Benchmarks
     [Benchmark(Baseline = true)]
     public void Inlined()
     {
-        var result = CalculateSum_Inlined(this._array);
+        var result = Sum_Inlined(this._array);
         Assert.Equal((this.N - 1) * this.N / 2, result);
     }
 
@@ -200,32 +200,35 @@ public partial class Benchmarks
     [Benchmark]
     public void Original()
     {
-        var result = CalculateSum_Original(this._array);
+        var result = Sum_Original(this._array);
         Assert.Equal((this.N - 1) * this.N / 2, result);
     }
-
-
-    private int[] _array = null!;
-
-
-    [GenerateInlined(nameof(CalculateSum_Inlined))]
-    public static int CalculateSum_Original(Span<int> values)
+    
+    
+    [GenerateInlined(nameof(Sum_Inlined))]
+    public static int Sum_Original(Span<int> span)
     {
         var count = 0;
-        ForEach(values, [Inline](x) => { count += x; });
+        span.ForEach([Inline](x) => { count += x; });
         return count;
     }
 
 
+    private int[] _array = null!;
+}
+
+
+public static class SpanExtensions
+{
     [SupportsInlining("""
-    foreach (var {action.arg0} in span)
+    foreach (var {action.arg0} in @this)
     {
         {action.body}
     }
     """)]
-    public static void ForEach<T>(Span<T> span, Action<T> action)
+    public static void ForEach<T>(this Span<T> @this, Action<T> action)
     {
-        foreach (var item in span)
+        foreach (var item in @this)
         {
             action(item);
         }
