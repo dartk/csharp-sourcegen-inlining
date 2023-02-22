@@ -1,7 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using CSharp.SourceGen.Inlining.Attributes;
-using static Methods;
+using static SpanExtensions;
 
 
 BenchmarkRunner.Run<Benchmarks>();
@@ -28,7 +28,7 @@ public partial class Benchmarks
     [Benchmark(Baseline = true)]
     public void Inlined()
     {
-        var result = CalculateSum_Inlined(this._array);
+        var result = Sum_Inlined(this._array);
         Assert.Equal((this.N - 1) * this.N / 2, result);
     }
 
@@ -36,28 +36,28 @@ public partial class Benchmarks
     [Benchmark]
     public void Original()
     {
-        var result = CalculateSum_Original(this._array);
+        var result = Sum_Original(this._array);
         Assert.Equal((this.N - 1) * this.N / 2, result);
     }
-
-
-    private int[] _array = null!;
-
-
-    [GenerateInlined(nameof(CalculateSum_Inlined))]
-    public static int CalculateSum_Original(Span<int> values)
+    
+    
+    [GenerateInlined(nameof(Sum_Inlined))]
+    public static int Sum_Original(Span<int> values)
     {
         var count = 0;
         values.ForEach([Inline](x) => { count += x; });
         return count;
     }
+
+
+    private int[] _array = null!;
 }
 
 
-public static class Methods
+public static class SpanExtensions
 {
     [SupportsInlining("""
-    foreach (var {action.arg0} in @this)
+    foreach (var {action.arg0} in values)
     {
         {action.body}
     }

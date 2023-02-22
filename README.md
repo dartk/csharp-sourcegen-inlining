@@ -71,6 +71,77 @@ public partial class Example
 }
 ```
 
+## Limitations
+
+`[SupportsInlining]` method requirements:
+
+- Method must be static.
+ 
+- For extensions methods receiver argument must be named `@this`.
+ 
+    This will generate an invalid code:
+ 
+    ```c#
+    [SupportsInlining("""
+    foreach (var {action.arg0} in span)
+    {
+        {action.body}
+    }
+    """)]
+    public static void ForEach<T>(this Span<T> span, Action<T> action)  // receiver 'span'
+    {
+        foreach (var item in span)
+        {
+            action(item);
+        }
+    }
+    ```
+
+    Correct version:
+
+    ```c#
+    [SupportsInlining("""
+    foreach (var {action.arg0} in @this)
+    {
+        {action.body}
+    }
+    """)]
+    public static void ForEach<T>(this Span<T> @this, Action<T> action)  // receiver '@this'
+    {
+        foreach (var item in @this)
+        {
+            action(item);
+        }
+    }
+    ```
+
+- Extension methods can only be called as an extension.
+
+    This will generate an invalid code:
+
+    ```c#
+    [GenerateInlined(nameof(Sum_Inlined))]
+    public static int Sum_Original(Span<int> values)
+    {
+        var count = 0;
+        ForEach(values, [Inline](x) => { count += x; });  // as a regular method
+        return count;
+    }
+    ```
+
+    Correct version:
+
+    ```c#
+    [GenerateInlined(nameof(Sum_Inlined))]
+    public static int Sum_Original(Span<int> values)
+    {
+        var count = 0;
+        values.ForEach([Inline](x) => { count += x; });  // as an extension
+        return count;
+    }
+    ```
+
+
 ## Motivation
 
 Using lambdas in C# provide a lot of convenience but at the same time it prevents compiler to perform certain optimizations and can lead to unnecessary memory allocations and garbage collection. In many cases an inlined version of a method is going to be significantly faster than the one using a lambda.
