@@ -72,6 +72,17 @@ public class InliningGenerator : IIncrementalGenerator
     private readonly record struct InlinableMethodInfo(
         IMethodSymbol Symbol, InvocationExpressionSyntax InvocationSyntax)
     {
+        /// <summary>
+        /// Extracts extension method receiver text. For example 'Foo.Bar' for 'Foo.Bar.ExtensionMethod()'
+        /// </summary>
+        public string GetExtensionMethodReceiverText()
+        {
+            var memberAccess = this.InvocationSyntax.ChildNodes()
+                .OfType<MemberAccessExpressionSyntax>().First();
+            return memberAccess.ChildNodes().First().ToString();
+        }
+
+
         public ImmutableArray<ArgumentInfo> GetArguments(ParenthesizedLambdaExpressionSyntax lambda)
         {
             var args = this.InvocationSyntax.ArgumentList.Arguments;
@@ -85,8 +96,18 @@ public class InliningGenerator : IIncrementalGenerator
             var names = this.Symbol.Parameters.Select(x => x.Name);
             var values = args.Select(x => x != lambdaArg ? x.ToString() : null);
 
-            var builder = ImmutableArray.CreateBuilder<ArgumentInfo>(args.Count);
-            builder.AddRange(names.Zip(values, (name, value) => new ArgumentInfo(name, value)));
+            var argsCount = args.Count;
+            var isExtensionMethod = this.Symbol.IsExtensionMethod;
+            if (isExtensionMethod) ++argsCount;
+
+            var builder = ImmutableArray.CreateBuilder<ArgumentInfo>(argsCount);
+            builder.AddRange(names.Zip(values, (name, value) =>
+                new ArgumentInfo(name == "this" ? "@this" : name, value)));
+
+            if (isExtensionMethod)
+            {
+                builder.Add(new ArgumentInfo("@this", this.GetExtensionMethodReceiverText()));
+            }
 
             return builder.MoveToImmutable();
         }
@@ -126,12 +147,9 @@ public class InliningGenerator : IIncrementalGenerator
             throw new Exception("Invocation was not found");
         }
 
-        IdentifierNameSyntax methodIdentifier;
-        {
-            var child = invocationExpression.ChildNodes().First();
-            methodIdentifier = child.DescendantNodesAndSelf()
-                .OfType<IdentifierNameSyntax>().Last();
-        }
+        var child = invocationExpression.ChildNodes().First();
+        var methodIdentifier = child.DescendantNodesAndSelf()
+            .OfType<IdentifierNameSyntax>().Last();
 
         var methodSymbol = (IMethodSymbol?)semanticModel.GetSymbolInfo(methodIdentifier).Symbol;
         if (methodSymbol == null)

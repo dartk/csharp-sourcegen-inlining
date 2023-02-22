@@ -1,6 +1,7 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using CSharp.SourceGen.Inlining.Attributes;
+using static Methods;
 
 
 BenchmarkRunner.Run<Benchmarks>();
@@ -47,20 +48,23 @@ public partial class Benchmarks
     public static int CalculateSum_Original(Span<int> values)
     {
         var count = 0;
-        ForEach(values, [Inline](x) => { count += x; });
+        values.ForEach([Inline](x) => { count += x; });
         return count;
     }
+}
 
 
+public static class Methods
+{
     [SupportsInlining("""
-    foreach (var {action.arg0} in span)
+    foreach (var {action.arg0} in @this)
     {
         {action.body}
     }
     """)]
-    public static void ForEach<T>(Span<T> span, Action<T> action)
+    public static void ForEach<T>(this Span<T> @this, Action<T> action)
     {
-        foreach (var item in span)
+        foreach (var item in @this)
         {
             action(item);
         }
