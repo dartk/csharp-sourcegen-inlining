@@ -19,5 +19,10 @@
     <ItemGroup>
         <PackageReference Include="BenchmarkDotNet" Version="0.13.5" />
     </ItemGroup>
+    
+    <PropertyGroup>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    </PropertyGroup>
 
 </Project>
