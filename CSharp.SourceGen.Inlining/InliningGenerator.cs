@@ -12,15 +12,38 @@ namespace CSharp.SourceGen.Inlining;
 public class InliningGenerator : IIncrementalGenerator
 {
     private const string Inline = nameof(Inline);
-    private const string GenerateInlined = nameof(GenerateInlined);
-    private const string GenerateInlinedAttribute = nameof(GenerateInlinedAttribute);
     private const string SupportsInliningAttribute = nameof(SupportsInliningAttribute);
+
+
+    public static bool IsInlineAttribute(AttributeSyntax attribute)
+    {
+        var name = attribute.Name;
+        while (true)
+        {
+            if (name is not QualifiedNameSyntax qns)
+            {
+                return false;
+            }
+            
+            if (qns is
+            {
+                Right: IdentifierNameSyntax,
+                Left: IdentifierNameSyntax leftName
+            })
+            {
+                return leftName.Identifier.Text == Inline;
+            }
+            
+            name = qns.Right;
+        }
+    }
 
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var provider = context.SyntaxProvider.CreateSyntaxProvider(
-            predicate: static (node, _) => node.IsAttribute(GenerateInlined),
+            predicate: static (node, _) =>
+                node is AttributeSyntax attribute && IsInlineAttribute(attribute),
             transform: static (context, _) =>
             {
                 var methodSyntax = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
@@ -41,10 +64,12 @@ public class InliningGenerator : IIncrementalGenerator
 
                 var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
 
-                var inlinedMethodName = GetInlinedMethodName(methodSymbol);
+                var (inlinedMethodName, accessibility) =
+                    GetInlinedMethodNameAndAccessibility(methodSymbol);
 
                 var writer = new StringWriter();
-                WriteInlinedMethod(writer, inlinedMethodName, methodSyntax, context.SemanticModel);
+                WriteInlinedMethod(writer, inlinedMethodName, methodSyntax,
+                    context.SemanticModel, accessibility);
 
                 return new
                 {
@@ -181,12 +206,22 @@ public class InliningGenerator : IIncrementalGenerator
     }
 
 
-    private static string? GetInlinedMethodName(IMethodSymbol methodSymbol)
+    private static (string?, Accessibility) GetInlinedMethodNameAndAccessibility(
+        IMethodSymbol methodSymbol)
     {
         var attribute = methodSymbol.GetAttributes()
-            .First(x => x.AttributeClass?.Name == GenerateInlinedAttribute);
+            .First(x => x.AttributeClass is { ContainingType.Name: Inline });
 
-        return GetAttributeArgumentValue(attribute);
+        var accessibility = attribute.AttributeClass!.Name switch
+        {
+            "PrivateAttribute" => Accessibility.Private,
+            "ProtectedAttribute" => Accessibility.Protected,
+            "InternalAttribute" => Accessibility.Internal,
+            "PublicAttribute" => Accessibility.Public,
+            _ => Accessibility.Private
+        };
+
+        return (GetAttributeArgumentValue(attribute), accessibility);
     }
 
 
@@ -244,16 +279,19 @@ public class InliningGenerator : IIncrementalGenerator
 
 
     private static void WriteInlinedMethod(TextWriter writer, string? inlinedName,
-        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
+        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel,
+        Accessibility accessibility)
     {
-        WriteInlinedMethodDeclaration(writer, inlinedName, methodSyntax, semanticModel);
+        WriteInlinedMethodDeclaration(writer, inlinedName, methodSyntax, semanticModel,
+            accessibility);
         writer.WriteLine();
         WriteInlinedMethodBlock(writer, methodSyntax, semanticModel);
     }
 
 
     private static void WriteInlinedMethodDeclaration(TextWriter writer,
-        string? inlinedName, MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
+        string? inlinedName, MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel,
+        Accessibility accessibility)
     {
         var symbol = (IMethodSymbol?)semanticModel.GetDeclaredSymbol(methodSyntax);
         if (symbol == null)
@@ -261,11 +299,16 @@ public class InliningGenerator : IIncrementalGenerator
             throw new Exception("Method symbol not found");
         }
 
-        var accessibility = symbol.DeclaredAccessibility == Accessibility.Public
-            ? "public "
-            : "private ";
+        var accessibilityStr = accessibility switch
+        {
+            Accessibility.Private => "private ",
+            Accessibility.Protected => "protected ",
+            Accessibility.Internal => "internal ",
+            Accessibility.Public => "public ",
+            _ => ""
+        };
 
-        writer.Write(accessibility);
+        writer.Write(accessibilityStr);
         if (symbol.IsStatic)
         {
             writer.Write("static ");

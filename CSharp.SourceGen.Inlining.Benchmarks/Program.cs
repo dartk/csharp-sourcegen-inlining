@@ -40,7 +40,7 @@ public partial class Benchmarks
     }
     
     
-    [GenerateInlined(nameof(Sum_Inlined))]
+    [Inline.Public(nameof(Sum_Inlined))]
     public static int Sum_Original(Span<int> span)
     {
         var count = 0;
