@@ -1,6 +1,7 @@
 ﻿using System.Collections.Immutable;
 using CSharp.SourceGen.Extensions;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
@@ -24,7 +25,7 @@ public class InliningGenerator : IIncrementalGenerator
             {
                 return false;
             }
-            
+
             if (qns is
             {
                 Right: IdentifierNameSyntax,
@@ -33,7 +34,7 @@ public class InliningGenerator : IIncrementalGenerator
             {
                 return leftName.Identifier.Text == Inline;
             }
-            
+
             name = qns.Right;
         }
     }
@@ -59,7 +60,8 @@ public class InliningGenerator : IIncrementalGenerator
                 }
 
                 var methodSymbol =
-                    (IMethodSymbol?)context.SemanticModel.GetDeclaredSymbol(methodSyntax)
+                    (IMethodSymbol?)ModelExtensions.GetDeclaredSymbol(context.SemanticModel,
+                        methodSyntax)
                     ?? throw new Exception("Type symbol was not found");
 
                 var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
@@ -78,10 +80,21 @@ public class InliningGenerator : IIncrementalGenerator
                         withUsing: "#define SOURCEGEN",
                         withMembers: writer.ToString())
                 };
-            }).Where(x => x != null);
+            });
 
         context.RegisterSourceOutput(provider,
-            static (context, arg) => { context.AddSource(arg!.FileName, arg.Text); });
+            static (context, arg) =>
+            {
+                if (arg == null)
+                {
+                    return;
+                }
+
+                var source = CSharpSyntaxTree.ParseText(arg.Text)
+                    .GetRoot().NormalizeWhitespace().ToFullString();
+                
+                context.AddSource(arg.FileName, source);
+            });
     }
 
 
@@ -176,7 +189,8 @@ public class InliningGenerator : IIncrementalGenerator
         var methodIdentifier = child.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>().Last();
 
-        var methodSymbol = (IMethodSymbol?)semanticModel.GetSymbolInfo(methodIdentifier).Symbol;
+        var methodSymbol =
+            (IMethodSymbol?)ModelExtensions.GetSymbolInfo(semanticModel, methodIdentifier).Symbol;
         if (methodSymbol == null)
         {
             throw new Exception("Method symbol was not found");
@@ -293,7 +307,7 @@ public class InliningGenerator : IIncrementalGenerator
         string? inlinedName, MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel,
         Accessibility accessibility)
     {
-        var symbol = (IMethodSymbol?)semanticModel.GetDeclaredSymbol(methodSyntax);
+        var symbol = (IMethodSymbol?)ModelExtensions.GetDeclaredSymbol(semanticModel, methodSyntax);
         if (symbol == null)
         {
             throw new Exception("Method symbol not found");
