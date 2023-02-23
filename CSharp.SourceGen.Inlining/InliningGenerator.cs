@@ -114,11 +114,11 @@ internal class SupportsInliningAttribute : Attribute
 }
 """);
         });
-        
+
         var provider = context.SyntaxProvider.CreateSyntaxProvider(
             predicate: static (node, _) =>
                 node is AttributeSyntax attribute && IsInlineAttribute(attribute),
-            transform: static (context, _) =>
+            transform: static (context, token) =>
             {
                 var methodSyntax = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
                 if (methodSyntax == null)
@@ -134,7 +134,7 @@ internal class SupportsInliningAttribute : Attribute
 
                 var methodSymbol =
                     (IMethodSymbol?)ModelExtensions.GetDeclaredSymbol(context.SemanticModel,
-                        methodSyntax)
+                        methodSyntax, token)
                     ?? throw new Exception("Type symbol was not found");
 
                 var declarationInfo = QualifiedDeclarationInfo.FromSyntax(typeSyntax);
@@ -144,7 +144,7 @@ internal class SupportsInliningAttribute : Attribute
 
                 var writer = new StringWriter();
                 WriteInlinedMethod(writer, inlinedMethodName, methodSyntax,
-                    context.SemanticModel, accessibility);
+                    context.SemanticModel, accessibility, token);
 
                 return new
                 {
@@ -165,7 +165,7 @@ internal class SupportsInliningAttribute : Attribute
 
                 var source = CSharpSyntaxTree.ParseText(arg.Text)
                     .GetRoot().NormalizeWhitespace().ToFullString();
-                
+
                 context.AddSource(arg.FileName, source);
             });
     }
@@ -174,10 +174,7 @@ internal class SupportsInliningAttribute : Attribute
     private readonly record struct ParameterInfo(string Name, string? Type);
 
 
-    private readonly record struct ArgumentInfo(string Name, string? Value)
-    {
-        public bool IsLambda => this.Value == null;
-    }
+    private readonly record struct ArgumentInfo(string Name, string? Value, bool IsLambda);
 
 
     private readonly record struct InlinableMethodInfo(
@@ -213,11 +210,25 @@ internal class SupportsInliningAttribute : Attribute
 
             var builder = ImmutableArray.CreateBuilder<ArgumentInfo>(argsCount);
             builder.AddRange(names.Zip(values, (name, value) =>
-                new ArgumentInfo(name == "this" ? "@this" : name, value)));
+            {
+                var isLambda = value == null;
+                if (name == "this")
+                {
+                    name = "@this";
+                }
+
+                if (!isLambda)
+                {
+                    name = "__" + name;
+                }
+
+                return new ArgumentInfo(name, value, isLambda);
+            }));
 
             if (isExtensionMethod)
             {
-                builder.Add(new ArgumentInfo("@this", this.GetExtensionMethodReceiverText()));
+                builder.Add(new ArgumentInfo("@this", this.GetExtensionMethodReceiverText(),
+                    false));
             }
 
             return builder.MoveToImmutable();
@@ -250,7 +261,7 @@ internal class SupportsInliningAttribute : Attribute
 
 
     private static InlinableMethodInfo GetInlinableMethodInfo(
-        LambdaExpressionSyntax lambda, SemanticModel semanticModel)
+        LambdaExpressionSyntax lambda, SemanticModel semanticModel, CancellationToken token)
     {
         var invocationExpression = lambda.FirstAncestorOrSelf<InvocationExpressionSyntax>();
         if (invocationExpression == null)
@@ -262,10 +273,23 @@ internal class SupportsInliningAttribute : Attribute
         var methodIdentifier = child.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>().Last();
 
-        var methodSymbol = (IMethodSymbol?)semanticModel.GetSymbolInfo(methodIdentifier).Symbol;
+        var getMethodSymbolResult =
+            ModelExtensions.GetSymbolInfo(semanticModel, methodIdentifier, token);
+        Logger.Log(invocationExpression);
+        Logger.Log(getMethodSymbolResult.CandidateReason);
+        Logger.Log(getMethodSymbolResult.CandidateSymbols.Length);
+
+        var methodSymbol = (IMethodSymbol?)getMethodSymbolResult.Symbol;
         if (methodSymbol == null)
         {
-            throw new Exception("Method symbol was not found");
+            if (getMethodSymbolResult.CandidateSymbols.Length == 1)
+            {
+                methodSymbol = (IMethodSymbol)getMethodSymbolResult.CandidateSymbols[0];
+            }
+            else
+            {
+                throw new Exception("Method symbol was not found");
+            }
         }
 
         return new InlinableMethodInfo(methodSymbol, invocationExpression);
@@ -334,9 +358,9 @@ internal class SupportsInliningAttribute : Attribute
 
 
     private static string GetInlinedText(ParenthesizedLambdaExpressionSyntax lambda,
-        SemanticModel semanticModel)
+        SemanticModel semanticModel, CancellationToken token)
     {
-        var methodInfo = GetInlinableMethodInfo(lambda, semanticModel);
+        var methodInfo = GetInlinableMethodInfo(lambda, semanticModel, token);
         var template = GetInliningTemplate(methodInfo.Symbol);
 
         var parameters = GetLambdaParameters(lambda);
@@ -366,12 +390,12 @@ internal class SupportsInliningAttribute : Attribute
 
     private static void WriteInlinedMethod(TextWriter writer, string? inlinedName,
         MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel,
-        Accessibility accessibility)
+        Accessibility accessibility, CancellationToken token)
     {
         WriteInlinedMethodDeclaration(writer, inlinedName, methodSyntax, semanticModel,
             accessibility);
         writer.WriteLine();
-        WriteInlinedMethodBlock(writer, methodSyntax, semanticModel);
+        WriteInlinedMethodBlock(writer, methodSyntax, semanticModel, token);
     }
 
 
@@ -386,7 +410,7 @@ internal class SupportsInliningAttribute : Attribute
         }
 
         writer.Write($"[CSharp.SourceGen.Inlining.GeneratedFrom(nameof({symbol.Name}))]");
-        
+
         var accessibilityStr = accessibility switch
         {
             Accessibility.Private => "private ",
@@ -421,7 +445,7 @@ internal class SupportsInliningAttribute : Attribute
 
 
     private static void WriteInlinedMethodBlock(TextWriter writer,
-        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel)
+        MethodDeclarationSyntax methodSyntax, SemanticModel semanticModel, CancellationToken token)
     {
         var inlineAttributes = methodSyntax.DescendantNodes().Where(x => x.IsAttribute(Inline));
         var inlineBlocks = inlineAttributes.Select(inlineAttrNode =>
@@ -432,7 +456,7 @@ internal class SupportsInliningAttribute : Attribute
             var expression = lambda.FirstAncestorOrSelf<ExpressionStatementSyntax>()
                 ?? throw new Exception("Expression statement was not found.");
 
-            var inlinedText = GetInlinedText(lambda, semanticModel);
+            var inlinedText = GetInlinedText(lambda, semanticModel, token);
 
             return new
             {
