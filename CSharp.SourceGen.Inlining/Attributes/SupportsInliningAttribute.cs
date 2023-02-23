@@ -1,4 +1,4 @@
-﻿namespace CSharp.SourceGen.Inlining.Attributes;
+﻿namespace CSharp.SourceGen.Inlining;
 
 
 [AttributeUsage(AttributeTargets.Method)]

@@ -1,6 +1,6 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
-using CSharp.SourceGen.Inlining.Attributes;
+using CSharp.SourceGen.Inlining;
 
 
 BenchmarkRunner.Run<Benchmarks>();
