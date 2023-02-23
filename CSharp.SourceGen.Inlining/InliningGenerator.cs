@@ -313,6 +313,8 @@ public class InliningGenerator : IIncrementalGenerator
             throw new Exception("Method symbol not found");
         }
 
+        writer.Write($"[CSharp.SourceGen.Inlining.GeneratedFrom(nameof({symbol.Name}))]");
+        
         var accessibilityStr = accessibility switch
         {
             Accessibility.Private => "private ",
