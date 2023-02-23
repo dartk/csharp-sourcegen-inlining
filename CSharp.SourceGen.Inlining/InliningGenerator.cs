@@ -42,6 +42,79 @@ public class InliningGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        context.RegisterPostInitializationOutput(static context =>
+        {
+            context.AddSource("InliningAttributes.cs", """
+#nullable enable
+namespace CSharp.SourceGen.Inlining;
+
+
+[AttributeUsage(AttributeTargets.Method)]
+internal class GeneratedFromAttribute : Attribute
+{
+    public GeneratedFromAttribute(string originalName)
+    {
+    }
+}
+
+
+[AttributeUsage(AttributeTargets.Method)]
+internal class InlineAttribute : Attribute
+{
+}
+
+
+internal static class Inline
+{
+
+    [AttributeUsage(AttributeTargets.Method)]
+    internal class PrivateAttribute : Attribute
+    {
+        public PrivateAttribute(string? name = null)
+        {
+        }
+    }
+
+
+    [AttributeUsage(AttributeTargets.Method)]
+    internal class PublicAttribute : Attribute
+    {
+        public PublicAttribute(string? name = null)
+        {
+        }
+    }
+
+
+    [AttributeUsage(AttributeTargets.Method)]
+    internal class ProtectedAttribute : Attribute
+    {
+        public ProtectedAttribute(string? name = null)
+        {
+        }
+    }
+
+
+    [AttributeUsage(AttributeTargets.Method)]
+    internal class InternalAttribute : Attribute
+    {
+        public InternalAttribute(string? name = null)
+        {
+        }
+    }
+
+}
+
+
+[AttributeUsage(AttributeTargets.Method)]
+internal class SupportsInliningAttribute : Attribute
+{
+    public SupportsInliningAttribute(string template)
+    {
+    }
+}
+""");
+        });
+        
         var provider = context.SyntaxProvider.CreateSyntaxProvider(
             predicate: static (node, _) =>
                 node is AttributeSyntax attribute && IsInlineAttribute(attribute),
@@ -189,8 +262,7 @@ public class InliningGenerator : IIncrementalGenerator
         var methodIdentifier = child.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>().Last();
 
-        var methodSymbol =
-            (IMethodSymbol?)ModelExtensions.GetSymbolInfo(semanticModel, methodIdentifier).Symbol;
+        var methodSymbol = (IMethodSymbol?)semanticModel.GetSymbolInfo(methodIdentifier).Symbol;
         if (methodSymbol == null)
         {
             throw new Exception("Method symbol was not found");
