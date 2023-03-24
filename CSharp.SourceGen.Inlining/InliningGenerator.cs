@@ -275,9 +275,6 @@ internal class SupportsInliningAttribute : Attribute
 
         var getMethodSymbolResult =
             ModelExtensions.GetSymbolInfo(semanticModel, methodIdentifier, token);
-        Logger.Log(invocationExpression);
-        Logger.Log(getMethodSymbolResult.CandidateReason);
-        Logger.Log(getMethodSymbolResult.CandidateSymbols.Length);
 
         var methodSymbol = (IMethodSymbol?)getMethodSymbolResult.Symbol;
         if (methodSymbol == null)
